@@ -1,0 +1,71 @@
+# Portable full-stack deployment. Local dev in this repo's environment uses the
+# machine's PostgreSQL 16 (port 5433) + dev servers instead — see README.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: movie_scraper
+    ports:
+      # Host access to the containerized DB (containers talk via db:5432).
+      # 5434 avoids clashing with a locally installed Postgres on 5432/5433.
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    image: movie-scraper-backend        # shared with the seeder service below
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/movie_scraper
+      ALEMBIC_DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/movie_scraper
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: populates the library the first time the DB is empty, then exits.
+  # Re-running `compose up` is a no-op once movies exist (idempotent).
+  # Reuses the backend image (Chromium is baked in for the chart import).
+  seeder:
+    image: movie-scraper-backend
+    command: ["python", "-m", "app.scrapers.init_library"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/movie_scraper
+      # Tune the first-run import (see backend/.env.example for all options):
+      SEED_ON_START: "true"
+      SEED_CHARTS: "true"     # IMDb Top 250 + Most Popular (~350, with posters)
+      SEED_RT_LIMIT: "25"     # add Rotten Tomatoes scores for the 25 most popular
+      SEED_DATASET: "false"   # set true to also mass-import ~32k dataset movies
+    depends_on:
+      backend:
+        condition: service_healthy   # ensures migrations have run
+    restart: "no"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Where the browser reaches the API from outside the compose network.
+        VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,44 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Env / secrets ----
+.env
+*.env
+!*.env.example
+
+# ---- Node / frontend ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+*.tsbuildinfo
+
+# ---- IMDb dataset downloads ----
+backend/data/
+
+# ---- Playwright ----
+playwright-report/
+test-results/
+.playwright/
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ---- Claude Code ----
+.claude/
+
+# ---- Logs ----
+*.log
